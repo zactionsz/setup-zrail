@@ -9,7 +9,7 @@ Pin both the Action and the platform archive:
 
 ```yaml
 - name: Set up zrail
-  uses: zactionsz/setup-zrail@1c852b17f3c0a6548a68b0f58f927e19bf3dcacc
+  uses: zactionsz/setup-zrail@e6f8b7b742b94d4d42ed1133df500f75eb465aa2
   with:
     version: "0.0.2"
     sha256: "<platform archive digest>"
