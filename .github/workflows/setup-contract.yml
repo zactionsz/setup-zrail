@@ -75,21 +75,11 @@ jobs:
         run: zrail check --root tests/fixtures/rust
 
   musl:
-    name: ${{ matrix.target }}
+    name: x86_64-unknown-linux-musl
     needs: quality
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     container: alpine:3.22
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
-            sha256: 5d6caa4b60bbdc8da44838dd9d1b1277a8d4459a45752118d6d862ab51fb4fba
-          - runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
-            sha256: e3b0ca1e3753b5ee9b6edf51efc0abebb6ade5c32aa5e4e871491d43e1d89935
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -99,12 +89,12 @@ jobs:
         uses: ./
         with:
           version: "0.0.2"
-          sha256: ${{ matrix.sha256 }}
+          sha256: 5d6caa4b60bbdc8da44838dd9d1b1277a8d4459a45752118d6d862ab51fb4fba
 
       - name: Verify setup outputs
         env:
           ACTUAL_TARGET: ${{ steps.zrail.outputs.target }}
-          EXPECTED_TARGET: ${{ matrix.target }}
+          EXPECTED_TARGET: x86_64-unknown-linux-musl
           ZRAIL_PATH: ${{ steps.zrail.outputs.path }}
         run: |
           test "$ACTUAL_TARGET" = "$EXPECTED_TARGET"
@@ -117,3 +107,44 @@ jobs:
       - name: Check consumer smoke fixture
         run: zrail check --root tests/fixtures/rust
 
+  musl-arm64:
+    name: aarch64-unknown-linux-musl
+    needs: quality
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      # GitHub does not support JavaScript Actions in Alpine containers on ARM64.
+      # Exercise the same Node 24 entrypoint in a native ARM64 musl container.
+      - name: Run setup contract in ARM64 musl
+        env:
+          INPUT_SHA256: e3b0ca1e3753b5ee9b6edf51efc0abebb6ade5c32aa5e4e871491d43e1d89935
+          INPUT_VERSION: "0.0.2"
+        run: |
+          docker run --rm \
+            --env INPUT_SHA256 \
+            --env INPUT_VERSION \
+            --volume "$PWD:/work:ro" \
+            --workdir /work \
+            node:24-alpine3.22 sh -euc '
+              mkdir -p /tmp/setup-zrail
+              : > /tmp/setup-zrail/output
+              : > /tmp/setup-zrail/path
+              export GITHUB_OUTPUT=/tmp/setup-zrail/output
+              export GITHUB_PATH=/tmp/setup-zrail/path
+              export RUNNER_TEMP=/tmp/setup-zrail/temp
+              export RUNNER_TOOL_CACHE=/tmp/setup-zrail/cache
+              node src/index.js
+              zrail_path="$(sed -n "s/^path=//p" "$GITHUB_OUTPUT")"
+              target="$(sed -n "s/^target=//p" "$GITHUB_OUTPUT")"
+              test "$target" = aarch64-unknown-linux-musl
+              test -f "$zrail_path"
+              "$zrail_path" --version
+              mkdir -p /tmp/smoke/src
+              printf "[package]\nname = \"smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n" > /tmp/smoke/Cargo.toml
+              printf "fn main() {}\n" > /tmp/smoke/src/main.rs
+              "$zrail_path" init --preset rust /tmp/smoke
+              "$zrail_path" check --root /tmp/smoke
+            '
