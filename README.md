@@ -9,7 +9,7 @@ Pin both the Action and the platform archive:
 
 ```yaml
 - name: Set up zrail
-  uses: zactionsz/setup-zrail@<full-commit-sha>
+  uses: zactionsz/setup-zrail@9b0d4b677b1f5e138d63e11bb1f67bb8716ed5d9
   with:
     version: "0.0.2"
     sha256: "<platform archive digest>"
@@ -59,7 +59,7 @@ rejected.
 ## Verification
 
 The Action selects one of the seven targets published by zrail, downloads the
-versioned archive from the immutable GitHub release, verifies the caller-pinned
+versioned archive from its GitHub release, verifies the caller-pinned
 SHA-256 before extraction, rejects unsafe archive paths, extracts only the
 zrail executable, and requires an exact `zrail <version>` identity response.
 Only then does it publish the executable to the runner tool cache and add it to
@@ -68,4 +68,3 @@ Only then does it publish the executable to the runner tool cache and add it to
 ## License
 
 MIT
-
