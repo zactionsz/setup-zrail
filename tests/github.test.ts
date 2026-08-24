@@ -1,11 +1,9 @@
-'use strict'
-
-const assert = require('node:assert/strict')
-const { mkdtemp, readFile, rm, writeFile } = require('node:fs/promises')
-const os = require('node:os')
-const path = require('node:path')
-const { test } = require('node:test')
-const { addPath, input, setOutput } = require('../src/github')
+import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { test } from 'node:test'
+import { addPath, input, setOutput } from '../src/github'
 
 test('reads inputs and writes explicit workflow command files', async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'setup-zrail-github-'))
@@ -30,4 +28,3 @@ test('reads inputs and writes explicit workflow command files', async (context) 
 test('rejects multiline workflow command values', () => {
   assert.throws(() => addPath('/safe\nunsafe', { GITHUB_PATH: '/tmp/unused' }), /multiline/u)
 })
-

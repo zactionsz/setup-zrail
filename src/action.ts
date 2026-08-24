@@ -1,33 +1,44 @@
-'use strict'
-
-const { randomUUID } = require('node:crypto')
-const { constants } = require('node:fs')
-const {
-  chmod,
-  copyFile,
-  lstat,
-  mkdir,
-  rename,
-  rm
-} = require('node:fs/promises')
-const os = require('node:os')
-const path = require('node:path')
-const { extractBinary } = require('./archive')
-const {
+import { randomUUID } from 'node:crypto'
+import { constants } from 'node:fs'
+import { chmod, copyFile, lstat, mkdir, rename, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { extractBinary } from './archive'
+import {
   archiveName,
   binaryName,
   installDirectory,
   releaseUrl,
   requireSha256,
   requireVersion,
-  resolveTarget
-} = require('./contracts')
-const { download } = require('./download')
-const github = require('./github')
-const { sha256File, verifyVersion } = require('./tool')
+  resolveTarget,
+  type Target
+} from './contracts'
+import { download } from './download'
+import * as github from './github'
+import { sha256File, verifyVersion } from './tool'
 
-async function runAction(environment = process.env, overrides = {}) {
-  const dependencies = {
+interface ActionDependencies {
+  download: typeof download
+  extractBinary: typeof extractBinary
+  resolveTarget: typeof resolveTarget
+  sha256File: typeof sha256File
+  verifyVersion: typeof verifyVersion
+}
+
+export interface ActionResult {
+  binaryPath: string
+  cacheHit: boolean
+  sha256: string
+  target: Target
+  version: string
+}
+
+export async function runAction(
+  environment: NodeJS.ProcessEnv = process.env,
+  overrides: Partial<ActionDependencies> = {}
+): Promise<ActionResult> {
+  const dependencies: ActionDependencies = {
     download,
     extractBinary,
     resolveTarget,
@@ -38,8 +49,8 @@ async function runAction(environment = process.env, overrides = {}) {
   const version = requireVersion(github.input('version', environment))
   const expectedSha256 = requireSha256(github.input('sha256', environment))
   const target = dependencies.resolveTarget()
-  const toolCache = environment.RUNNER_TOOL_CACHE || environment.RUNNER_TEMP || os.tmpdir()
-  const runnerTemp = environment.RUNNER_TEMP || os.tmpdir()
+  const toolCache = environment.RUNNER_TOOL_CACHE ?? environment.RUNNER_TEMP ?? os.tmpdir()
+  const runnerTemp = environment.RUNNER_TEMP ?? os.tmpdir()
   const installDir = installDirectory(toolCache, version, target, expectedSha256)
   const installedBinary = path.join(installDir, binaryName(target))
   let cacheHit = await validCache(
@@ -102,14 +113,14 @@ async function runAction(environment = process.env, overrides = {}) {
   return { binaryPath: installedBinary, cacheHit, sha256: expectedSha256, target, version }
 }
 
-async function validCache(
-  installDir,
-  runnerTemp,
-  version,
-  target,
-  archiveSha256,
-  dependencies
-) {
+export async function validCache(
+  installDir: string,
+  runnerTemp: string,
+  version: string,
+  target: Target,
+  archiveSha256: string,
+  dependencies: ActionDependencies
+): Promise<boolean> {
   const binaryPath = path.join(installDir, binaryName(target))
   const archivePath = path.join(installDir, archiveName(version, target))
   const validationRoot = path.resolve(
@@ -141,23 +152,23 @@ async function validCache(
     if (candidateSha256 !== binarySha256) return false
     dependencies.verifyVersion(binaryPath, version)
     return true
-  } catch (error) {
-    if (error.code === 'ENOENT') return false
+  } catch (error: unknown) {
+    if (isErrnoException(error) && error.code === 'ENOENT') return false
     throw error
   } finally {
     await rm(validationRoot, { force: true, recursive: true })
   }
 }
 
-async function publishVerified(
-  source,
-  archive,
-  installDir,
-  version,
-  target,
-  archiveSha256,
-  dependencies
-) {
+export async function publishVerified(
+  source: string,
+  archive: string,
+  installDir: string,
+  version: string,
+  target: Target,
+  archiveSha256: string,
+  dependencies: ActionDependencies
+): Promise<void> {
   await mkdir(path.dirname(installDir), { recursive: true })
   const publishDir = `${installDir}.${randomUUID()}.tmp`
   const destination = path.join(publishDir, binaryName(target))
@@ -187,4 +198,6 @@ async function publishVerified(
   }
 }
 
-module.exports = { publishVerified, runAction, validCache }
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error
+}

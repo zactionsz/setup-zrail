@@ -1,11 +1,14 @@
-'use strict'
+import { chmod, lstat, mkdir } from 'node:fs/promises'
+import path from 'node:path'
+import { binaryName, type Target } from './contracts'
+import { run, type RunCommand } from './tool'
 
-const { chmod, lstat, mkdir } = require('node:fs/promises')
-const path = require('node:path')
-const { run } = require('./tool')
-const { binaryName } = require('./contracts')
-
-async function extractBinary(archivePath, destination, target, runCommand = run) {
+export async function extractBinary(
+  archivePath: string,
+  destination: string,
+  target: Target,
+  runCommand: RunCommand = run
+): Promise<string> {
   const binary = binaryName(target)
   const compressed = archivePath.endsWith('.tar.gz')
   const listing = runCommand('tar', [compressed ? '-tzf' : '-tf', archivePath]).output
@@ -23,9 +26,9 @@ async function extractBinary(archivePath, destination, target, runCommand = run)
   return binaryPath
 }
 
-function validateEntries(entries, binary) {
-  const names = new Set()
-  const caseInsensitiveNames = new Set()
+export function validateEntries(entries: readonly string[], binary: string): void {
+  const names = new Set<string>()
+  const caseInsensitiveNames = new Set<string>()
 
   for (const entry of entries) {
     if (
@@ -47,5 +50,3 @@ function validateEntries(entries, binary) {
     throw new Error(`Archive does not contain ${binary}`)
   }
 }
-
-module.exports = { extractBinary, validateEntries }

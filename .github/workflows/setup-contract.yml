@@ -19,6 +19,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install development dependencies
+        run: npm ci
+
       - name: Run complete local gate
         run: npm run check
 
@@ -117,7 +126,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       # GitHub does not support JavaScript Actions in Alpine containers on ARM64.
-      # Exercise the same Node 24 entrypoint in a native ARM64 musl container.
+      # Exercise the same bundled Node 24 entrypoint in a native ARM64 musl container.
       - name: Run setup contract in ARM64 musl
         env:
           INPUT_SHA256: e3b0ca1e3753b5ee9b6edf51efc0abebb6ade5c32aa5e4e871491d43e1d89935
@@ -136,7 +145,7 @@ jobs:
               export GITHUB_PATH=/tmp/setup-zrail/path
               export RUNNER_TEMP=/tmp/setup-zrail/temp
               export RUNNER_TOOL_CACHE=/tmp/setup-zrail/cache
-              node src/index.js
+              node dist/index.js
               zrail_path="$(sed -n "s/^path=//p" "$GITHUB_OUTPUT")"
               target="$(sed -n "s/^target=//p" "$GITHUB_OUTPUT")"
               test "$target" = aarch64-unknown-linux-musl

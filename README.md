@@ -65,6 +65,17 @@ zrail executable, and requires an exact `zrail <version>` identity response.
 Only then does it publish the executable to the runner tool cache and add it to
 `PATH` for later steps.
 
+## Development
+
+The Action is authored in strict TypeScript under `src/`. GitHub executes the
+committed `dist/index.js` bundle, and the complete gate verifies that the bundle
+matches its source:
+
+```sh
+npm ci
+npm run check
+```
+
 ## License
 
 MIT

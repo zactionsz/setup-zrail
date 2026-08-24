@@ -1,16 +1,24 @@
-'use strict'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 
-const { createHash } = require('node:crypto')
-const { createReadStream } = require('node:fs')
-const { spawnSync } = require('node:child_process')
+export interface RunResult {
+  output: string
+}
 
-async function sha256File(file) {
+export type RunCommand = (command: string, args: string[]) => RunResult
+
+export async function sha256File(file: string): Promise<string> {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(file)) hash.update(chunk)
   return hash.digest('hex')
 }
 
-function verifyVersion(binaryPath, version, runCommand = run) {
+export function verifyVersion(
+  binaryPath: string,
+  version: string,
+  runCommand: RunCommand = run
+): void {
   const result = runCommand(binaryPath, ['--version'])
   const actual = result.output.trim()
   const expected = `zrail ${version}`
@@ -19,7 +27,7 @@ function verifyVersion(binaryPath, version, runCommand = run) {
   }
 }
 
-function run(command, args) {
+export function run(command: string, args: string[]): RunResult {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
@@ -34,5 +42,3 @@ function run(command, args) {
   }
   return { output }
 }
-
-module.exports = { run, sha256File, verifyVersion }

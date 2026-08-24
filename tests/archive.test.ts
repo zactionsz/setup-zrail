@@ -1,12 +1,10 @@
-'use strict'
-
-const assert = require('node:assert/strict')
-const { writeFileSync } = require('node:fs')
-const { mkdtemp, readFile, rm, writeFile } = require('node:fs/promises')
-const os = require('node:os')
-const path = require('node:path')
-const { test } = require('node:test')
-const { extractBinary, validateEntries } = require('../src/archive')
+import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { test } from 'node:test'
+import { extractBinary, validateEntries } from '../src/archive'
 
 test('accepts the release layout and rejects unsafe entries', () => {
   assert.doesNotThrow(() => validateEntries(['zrail', 'LICENSE', 'README.md'], 'zrail'))
@@ -22,7 +20,7 @@ test('lists the archive and extracts only the expected binary', async (context) 
   context.after(() => rm(root, { force: true, recursive: true }))
   const archive = path.join(root, 'release.tar.gz')
   const destination = path.join(root, 'out')
-  const calls = []
+  const calls: Array<[string, string[]]> = []
 
   const binary = await extractBinary(
     archive,
@@ -38,8 +36,5 @@ test('lists the archive and extracts only the expected binary', async (context) 
 
   assert.equal(await readFile(binary, 'utf8'), 'binary')
   assert.deepEqual(calls[0], ['tar', ['-tzf', archive]])
-  assert.deepEqual(calls[1], [
-    'tar',
-    ['-xzf', archive, '-C', destination, 'zrail']
-  ])
+  assert.deepEqual(calls[1], ['tar', ['-xzf', archive, '-C', destination, 'zrail']])
 })

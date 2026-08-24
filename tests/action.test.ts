@@ -1,21 +1,27 @@
-'use strict'
-
-const assert = require('node:assert/strict')
-const { createHash } = require('node:crypto')
-const { mkdir, mkdtemp, readFile, rm, writeFile } = require('node:fs/promises')
-const os = require('node:os')
-const path = require('node:path')
-const { test } = require('node:test')
-const { runAction } = require('../src/action')
-const { installDirectory } = require('../src/contracts')
-const { verifyVersion } = require('../src/tool')
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { test, type TestContext } from 'node:test'
+import { runAction } from '../src/action'
+import { installDirectory } from '../src/contracts'
+import { verifyVersion } from '../src/tool'
 
 const VERSION = '0.0.2'
-const TARGET = 'x86_64-unknown-linux-gnu'
+const TARGET = 'x86_64-unknown-linux-gnu' as const
+
+interface Fixture {
+  environment: NodeJS.ProcessEnv
+  outputFile: string
+  pathFile: string
+  sha256: string
+  toolCache: string
+}
 
 test('installs a verified binary and only probes its version', async (context) => {
   const fixture = await createFixture(context, 'archive bytes')
-  const versionProbes = []
+  const versionProbes: Array<{ binary: string; version: string }> = []
 
   const result = await runAction(fixture.environment, {
     download: async (_url, archive) => {
@@ -37,7 +43,10 @@ test('installs a verified binary and only probes its version', async (context) =
   assert.equal(result.cacheHit, false)
   assert.equal(await readFile(result.binaryPath, 'utf8'), 'zrail binary')
   assert.equal(versionProbes.length, 2)
-  assert.deepEqual(versionProbes.map(({ version }) => version), [VERSION, VERSION])
+  assert.deepEqual(
+    versionProbes.map(({ version }) => version),
+    [VERSION, VERSION]
+  )
   assert.match(await readFile(fixture.pathFile, 'utf8'), new RegExp(`${fixture.sha256}\\r?\\n$`, 'u'))
   assert.match(await readFile(fixture.outputFile, 'utf8'), /cache-hit=false/u)
 })
@@ -51,7 +60,7 @@ test('reuses a verified cache entry without downloading', async (context) => {
   await writeFile(path.join(installDir, `zrail-${VERSION}-${TARGET}.tar.gz`), 'archive bytes')
 
   const result = await runAction(fixture.environment, {
-    download: () => assert.fail('download should not run'),
+    download: async () => assert.fail('download should not run'),
     extractBinary: async (_archive, destination) => {
       await mkdir(destination, { recursive: true })
       const candidate = path.join(destination, 'zrail')
@@ -105,7 +114,7 @@ test('does not extract, cache, or export a download with the wrong digest', asyn
         await mkdir(path.dirname(archive), { recursive: true })
         await writeFile(archive, 'wrong archive')
       },
-      extractBinary: () => assert.fail('extraction should not run'),
+      extractBinary: async () => assert.fail('extraction should not run'),
       resolveTarget: () => TARGET,
       verifyVersion: () => assert.fail('version probe should not run')
     }),
@@ -117,7 +126,7 @@ test('does not extract, cache, or export a download with the wrong digest', asyn
 })
 
 test('the binary identity probe invokes only --version', () => {
-  let invocation
+  let invocation: { args: string[]; command: string } | undefined
   verifyVersion('/cache/zrail', VERSION, (command, args) => {
     invocation = { args, command }
     return { output: `zrail ${VERSION}\n` }
@@ -125,7 +134,7 @@ test('the binary identity probe invokes only --version', () => {
   assert.deepEqual(invocation, { args: ['--version'], command: '/cache/zrail' })
 })
 
-async function createFixture(context, archiveContents) {
+async function createFixture(context: TestContext, archiveContents: string): Promise<Fixture> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'setup-zrail-action-'))
   context.after(() => rm(root, { force: true, recursive: true }))
   const outputFile = path.join(root, 'output')

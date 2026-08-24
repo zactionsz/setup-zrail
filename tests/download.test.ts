@@ -1,11 +1,9 @@
-'use strict'
-
-const assert = require('node:assert/strict')
-const { mkdtemp, readFile, rm } = require('node:fs/promises')
-const os = require('node:os')
-const path = require('node:path')
-const { test } = require('node:test')
-const { MAX_ARCHIVE_BYTES, download } = require('../src/download')
+import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { test } from 'node:test'
+import { download, MAX_ARCHIVE_BYTES } from '../src/download'
 
 test('downloads release bytes atomically', async (context) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'setup-zrail-download-'))
@@ -50,4 +48,3 @@ test('rejects failed and oversized downloads without a partial archive', async (
   )
   await assert.rejects(readFile(destination), /ENOENT/u)
 })
-

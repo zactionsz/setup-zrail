@@ -1,15 +1,20 @@
-'use strict'
+import { randomUUID } from 'node:crypto'
+import { createWriteStream } from 'node:fs'
+import { mkdir, rename, rm } from 'node:fs/promises'
+import path from 'node:path'
+import { Readable, Transform, type TransformCallback } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 
-const { randomUUID } = require('node:crypto')
-const { createWriteStream } = require('node:fs')
-const { mkdir, rename, rm } = require('node:fs/promises')
-const path = require('node:path')
-const { Readable, Transform } = require('node:stream')
-const { pipeline } = require('node:stream/promises')
+export const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 
-const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+type FetchFunction = (url: string, init?: RequestInit) => Promise<Response>
 
-async function download(url, destination, fetchImpl = fetch) {
+export async function download(
+  url: string,
+  destination: string,
+  fetchImpl: FetchFunction = fetch
+): Promise<void> {
   await mkdir(path.dirname(destination), { recursive: true })
   const temporary = `${destination}.${randomUUID()}.tmp`
 
@@ -32,7 +37,7 @@ async function download(url, destination, fetchImpl = fetch) {
 
     let received = 0
     const limit = new Transform({
-      transform(chunk, _encoding, callback) {
+      transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
         received += chunk.length
         if (received > MAX_ARCHIVE_BYTES) {
           callback(new Error(`Download exceeds the ${MAX_ARCHIVE_BYTES}-byte safety limit`))
@@ -43,16 +48,13 @@ async function download(url, destination, fetchImpl = fetch) {
     })
 
     await pipeline(
-      Readable.fromWeb(response.body),
+      Readable.fromWeb(response.body as unknown as NodeReadableStream),
       limit,
       createWriteStream(temporary, { flags: 'wx' })
     )
     await rename(temporary, destination)
-  } catch (error) {
+  } catch (error: unknown) {
     await rm(temporary, { force: true })
     throw error
   }
 }
-
-module.exports = { MAX_ARCHIVE_BYTES, download }
-

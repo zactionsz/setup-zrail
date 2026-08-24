@@ -1,9 +1,7 @@
-'use strict'
-
-const assert = require('node:assert/strict')
-const path = require('node:path')
-const { test } = require('node:test')
-const {
+import assert from 'node:assert/strict'
+import path from 'node:path'
+import { test } from 'node:test'
+import {
   archiveName,
   binaryName,
   installDirectory,
@@ -11,7 +9,7 @@ const {
   requireSha256,
   requireVersion,
   resolveTarget
-} = require('../src/contracts')
+} from '../src/contracts'
 
 const VERSION = '0.0.2'
 const SHA256 = 'FB535CF8A72CF15995F0C4D2EA640629624B300736C67C7961E058F4A12419D9'
@@ -61,4 +59,3 @@ test('builds immutable release and cache paths', () => {
     path.resolve('/cache', 'zrail', VERSION, target, SHA256.toLowerCase())
   )
 })
-

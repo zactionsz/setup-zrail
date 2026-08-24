@@ -5,11 +5,19 @@
   "description": "GitHub Action for installing checksum-pinned zrail releases",
   "license": "MIT",
   "scripts": {
-    "check": "npm run lint && npm test",
-    "lint": "node --check src/action.js && node --check src/archive.js && node --check src/contracts.js && node --check src/download.js && node --check src/github.js && node --check src/index.js && node --check src/tool.js && node --check tests/action.test.js && node --check tests/archive.test.js && node --check tests/contracts.test.js && node --check tests/download.test.js && node --check tests/github.test.js",
-    "test": "node --test"
+    "bundle": "esbuild src/index.ts --bundle --format=cjs --legal-comments=none --outfile=dist/index.js --platform=node --target=node24",
+    "check": "npm run typecheck && npm test && npm run check:bundle",
+    "check:bundle": "npm run bundle && git diff --exit-code -- dist/index.js",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2"
   }
 }
