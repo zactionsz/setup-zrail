@@ -1,0 +1,15 @@
+{
+  "name": "setup-zrail-action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub Action for installing checksum-pinned zrail releases",
+  "license": "MIT",
+  "scripts": {
+    "check": "npm run lint && npm test",
+    "lint": "node --check src/action.js && node --check src/archive.js && node --check src/contracts.js && node --check src/download.js && node --check src/github.js && node --check src/index.js && node --check src/tool.js && node --check tests/action.test.js && node --check tests/archive.test.js && node --check tests/contracts.test.js && node --check tests/download.test.js && node --check tests/github.test.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

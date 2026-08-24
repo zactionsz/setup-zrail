@@ -1,0 +1,53 @@
+'use strict'
+
+const assert = require('node:assert/strict')
+const { mkdtemp, readFile, rm } = require('node:fs/promises')
+const os = require('node:os')
+const path = require('node:path')
+const { test } = require('node:test')
+const { MAX_ARCHIVE_BYTES, download } = require('../src/download')
+
+test('downloads release bytes atomically', async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'setup-zrail-download-'))
+  context.after(() => rm(root, { force: true, recursive: true }))
+  const destination = path.join(root, 'nested', 'zrail.tar.gz')
+
+  await download(
+    'https://example.invalid/zrail.tar.gz',
+    destination,
+    async () => new Response('verified bytes', { status: 200 })
+  )
+
+  assert.equal(await readFile(destination, 'utf8'), 'verified bytes')
+})
+
+test('rejects failed and oversized downloads without a partial archive', async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'setup-zrail-download-'))
+  context.after(() => rm(root, { force: true, recursive: true }))
+  const destination = path.join(root, 'zrail.tar.gz')
+
+  await assert.rejects(
+    download(
+      'https://example.invalid/zrail.tar.gz',
+      destination,
+      async () => new Response('missing', { status: 404 })
+    ),
+    /HTTP 404/u
+  )
+  await assert.rejects(readFile(destination), /ENOENT/u)
+
+  await assert.rejects(
+    download(
+      'https://example.invalid/zrail.tar.gz',
+      destination,
+      async () =>
+        new Response('small', {
+          headers: { 'content-length': String(MAX_ARCHIVE_BYTES + 1) },
+          status: 200
+        })
+    ),
+    /safety limit/u
+  )
+  await assert.rejects(readFile(destination), /ENOENT/u)
+})
+

@@ -1,0 +1,119 @@
+name: Setup contract
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Unit and contract tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Run complete local gate
+        run: npm run check
+
+  native:
+    name: ${{ matrix.target }}
+    needs: quality
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            sha256: fb535cf8a72cf15995f0c4d2ea640629624b300736c67c7961e058f4a12419d9
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            sha256: d2d4d55b56a0fd5c3d4e981f182dbbfe9839aae4717a4ea8248087ab9b63c74d
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            sha256: fd8202f523b4e7adce5e966197d545753e1e36faa86728ac863c855640001916
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            sha256: efc191a76b71d75e61b195f50759f55562830a4d8ad6c3a2a3bc7b1d8c741141
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            sha256: 0d1d97ae29fc532d503fb0edba3b18d02a85ce55735bd2d0ad868cbeaebb5a58
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up zrail
+        id: zrail
+        uses: ./
+        with:
+          version: "0.0.2"
+          sha256: ${{ matrix.sha256 }}
+
+      - name: Verify setup outputs
+        shell: bash
+        env:
+          ACTUAL_TARGET: ${{ steps.zrail.outputs.target }}
+          EXPECTED_TARGET: ${{ matrix.target }}
+          ZRAIL_PATH: ${{ steps.zrail.outputs.path }}
+        run: |
+          test "$ACTUAL_TARGET" = "$EXPECTED_TARGET"
+          test -f "$ZRAIL_PATH"
+          zrail --version
+
+      - name: Run consumer-owned smoke operation
+        run: zrail init --preset rust tests/fixtures/rust
+
+      - name: Check consumer smoke fixture
+        run: zrail check --root tests/fixtures/rust
+
+  musl:
+    name: ${{ matrix.target }}
+    needs: quality
+    runs-on: ${{ matrix.runner }}
+    container: alpine:3.22
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            sha256: 5d6caa4b60bbdc8da44838dd9d1b1277a8d4459a45752118d6d862ab51fb4fba
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            sha256: e3b0ca1e3753b5ee9b6edf51efc0abebb6ade5c32aa5e4e871491d43e1d89935
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up zrail
+        id: zrail
+        uses: ./
+        with:
+          version: "0.0.2"
+          sha256: ${{ matrix.sha256 }}
+
+      - name: Verify setup outputs
+        env:
+          ACTUAL_TARGET: ${{ steps.zrail.outputs.target }}
+          EXPECTED_TARGET: ${{ matrix.target }}
+          ZRAIL_PATH: ${{ steps.zrail.outputs.path }}
+        run: |
+          test "$ACTUAL_TARGET" = "$EXPECTED_TARGET"
+          test -f "$ZRAIL_PATH"
+          zrail --version
+
+      - name: Run consumer-owned smoke operation
+        run: zrail init --preset rust tests/fixtures/rust
+
+      - name: Check consumer smoke fixture
+        run: zrail check --root tests/fixtures/rust
+
