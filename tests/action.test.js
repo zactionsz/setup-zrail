@@ -48,19 +48,16 @@ test('reuses a verified cache entry without downloading', async (context) => {
   const binary = path.join(installDir, 'zrail')
   await mkdir(installDir, { recursive: true })
   await writeFile(binary, 'cached binary')
-  const binarySha256 = createHash('sha256').update('cached binary').digest('hex')
-  await writeFile(
-    path.join(installDir, 'manifest.json'),
-    `${JSON.stringify({
-      archiveSha256: fixture.sha256,
-      binarySha256,
-      target: TARGET,
-      version: VERSION
-    })}\n`
-  )
+  await writeFile(path.join(installDir, `zrail-${VERSION}-${TARGET}.tar.gz`), 'archive bytes')
 
   const result = await runAction(fixture.environment, {
     download: () => assert.fail('download should not run'),
+    extractBinary: async (_archive, destination) => {
+      await mkdir(destination, { recursive: true })
+      const candidate = path.join(destination, 'zrail')
+      await writeFile(candidate, 'cached binary')
+      return candidate
+    },
     resolveTarget: () => TARGET,
     verifyVersion: () => undefined
   })
@@ -68,6 +65,35 @@ test('reuses a verified cache entry without downloading', async (context) => {
   assert.equal(result.cacheHit, true)
   assert.equal(result.binaryPath, binary)
   assert.match(await readFile(fixture.outputFile, 'utf8'), /cache-hit=true/u)
+})
+
+test('replaces a cache entry whose executable does not match the pinned archive', async (context) => {
+  const fixture = await createFixture(context, 'archive bytes')
+  const installDir = installDirectory(fixture.toolCache, VERSION, TARGET, fixture.sha256)
+  await mkdir(installDir, { recursive: true })
+  await writeFile(path.join(installDir, 'zrail'), 'tampered binary')
+  await writeFile(path.join(installDir, `zrail-${VERSION}-${TARGET}.tar.gz`), 'archive bytes')
+  let downloadCount = 0
+
+  const result = await runAction(fixture.environment, {
+    download: async (_url, archive) => {
+      downloadCount += 1
+      await mkdir(path.dirname(archive), { recursive: true })
+      await writeFile(archive, 'archive bytes')
+    },
+    extractBinary: async (_archive, destination) => {
+      await mkdir(destination, { recursive: true })
+      const candidate = path.join(destination, 'zrail')
+      await writeFile(candidate, 'verified binary')
+      return candidate
+    },
+    resolveTarget: () => TARGET,
+    verifyVersion: () => undefined
+  })
+
+  assert.equal(downloadCount, 1)
+  assert.equal(result.cacheHit, false)
+  assert.equal(await readFile(result.binaryPath, 'utf8'), 'verified binary')
 })
 
 test('does not extract, cache, or export a download with the wrong digest', async (context) => {
@@ -123,4 +149,3 @@ async function createFixture(context, archiveContents) {
     toolCache
   }
 }
-

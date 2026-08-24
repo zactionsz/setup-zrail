@@ -7,10 +7,8 @@ const {
   copyFile,
   lstat,
   mkdir,
-  readFile,
   rename,
-  rm,
-  writeFile
+  rm
 } = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
@@ -44,7 +42,14 @@ async function runAction(environment = process.env, overrides = {}) {
   const runnerTemp = environment.RUNNER_TEMP || os.tmpdir()
   const installDir = installDirectory(toolCache, version, target, expectedSha256)
   const installedBinary = path.join(installDir, binaryName(target))
-  let cacheHit = await validCache(installDir, version, target, expectedSha256, dependencies)
+  let cacheHit = await validCache(
+    installDir,
+    runnerTemp,
+    version,
+    target,
+    expectedSha256,
+    dependencies
+  )
 
   if (cacheHit) {
     github.info(`Using verified cached zrail ${version} for ${target}`)
@@ -73,6 +78,7 @@ async function runAction(environment = process.env, overrides = {}) {
       dependencies.verifyVersion(candidate, version)
       await publishVerified(
         candidate,
+        archive,
         installDir,
         version,
         target,
@@ -96,43 +102,56 @@ async function runAction(environment = process.env, overrides = {}) {
   return { binaryPath: installedBinary, cacheHit, sha256: expectedSha256, target, version }
 }
 
-async function validCache(installDir, version, target, archiveSha256, dependencies) {
+async function validCache(
+  installDir,
+  runnerTemp,
+  version,
+  target,
+  archiveSha256,
+  dependencies
+) {
   const binaryPath = path.join(installDir, binaryName(target))
-  const manifestPath = path.join(installDir, 'manifest.json')
+  const archivePath = path.join(installDir, archiveName(version, target))
+  const validationRoot = path.resolve(
+    runnerTemp,
+    'setup-zrail-cache-validation',
+    `${version}-${target}-${randomUUID()}`
+  )
   try {
-    const [binaryMetadata, manifestMetadata, manifestText] = await Promise.all([
+    const [binaryMetadata, archiveMetadata] = await Promise.all([
       lstat(binaryPath),
-      lstat(manifestPath),
-      readFile(manifestPath, 'utf8')
+      lstat(archivePath)
     ])
     if (
       !binaryMetadata.isFile() ||
       binaryMetadata.isSymbolicLink() ||
-      !manifestMetadata.isFile() ||
-      manifestMetadata.isSymbolicLink()
+      !archiveMetadata.isFile() ||
+      archiveMetadata.isSymbolicLink() ||
+      (await dependencies.sha256File(archivePath)) !== archiveSha256
     ) {
       return false
     }
 
-    const manifest = JSON.parse(manifestText)
-    if (
-      manifest.version !== version ||
-      manifest.target !== target ||
-      manifest.archiveSha256 !== archiveSha256 ||
-      manifest.binarySha256 !== (await dependencies.sha256File(binaryPath))
-    ) {
-      return false
-    }
+    const candidate = await dependencies.extractBinary(archivePath, validationRoot, target)
+    dependencies.verifyVersion(candidate, version)
+    const [candidateSha256, binarySha256] = await Promise.all([
+      dependencies.sha256File(candidate),
+      dependencies.sha256File(binaryPath)
+    ])
+    if (candidateSha256 !== binarySha256) return false
     dependencies.verifyVersion(binaryPath, version)
     return true
   } catch (error) {
-    if (error.code === 'ENOENT' || error instanceof SyntaxError) return false
+    if (error.code === 'ENOENT') return false
     throw error
+  } finally {
+    await rm(validationRoot, { force: true, recursive: true })
   }
 }
 
 async function publishVerified(
   source,
+  archive,
   installDir,
   version,
   target,
@@ -142,17 +161,24 @@ async function publishVerified(
   await mkdir(path.dirname(installDir), { recursive: true })
   const publishDir = `${installDir}.${randomUUID()}.tmp`
   const destination = path.join(publishDir, binaryName(target))
+  const cachedArchive = path.join(publishDir, archiveName(version, target))
   try {
     await mkdir(publishDir)
     await copyFile(source, destination, constants.COPYFILE_EXCL)
+    await copyFile(archive, cachedArchive, constants.COPYFILE_EXCL)
     if (!target.endsWith('-windows-msvc')) await chmod(destination, 0o755)
-    const binarySha256 = await dependencies.sha256File(destination)
+    const [sourceSha256, destinationSha256, cachedArchiveSha256] = await Promise.all([
+      dependencies.sha256File(source),
+      dependencies.sha256File(destination),
+      dependencies.sha256File(cachedArchive)
+    ])
+    if (sourceSha256 !== destinationSha256) {
+      throw new Error('SHA-256 mismatch while staging the verified zrail executable')
+    }
+    if (cachedArchiveSha256 !== archiveSha256) {
+      throw new Error('SHA-256 mismatch while staging the verified zrail archive')
+    }
     dependencies.verifyVersion(destination, version)
-    await writeFile(
-      path.join(publishDir, 'manifest.json'),
-      `${JSON.stringify({ archiveSha256, binarySha256, target, version })}\n`,
-      { encoding: 'utf8', flag: 'wx' }
-    )
 
     await rm(installDir, { force: true, recursive: true })
     await rename(publishDir, installDir)
@@ -162,4 +188,3 @@ async function publishVerified(
 }
 
 module.exports = { publishVerified, runAction, validCache }
-
